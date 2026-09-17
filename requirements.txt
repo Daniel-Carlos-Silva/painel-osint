@@ -1,2 +1,4 @@
 Flask==3.0.2
 requests==2.31.0
+phonenumbers==8.13.30
+numpy==1.26.4
