@@ -4,7 +4,7 @@ import re
 
 app = Flask(__name__)
 
-# Visual expandido do painel com abas
+# Visual expandido do painel com 3 abas
 HTML_PAGINA = """
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -43,6 +43,7 @@ HTML_PAGINA = """
         <div class="logo">🛡️ OSINT Online</div>
         <button class="nav-btn active" onclick="mudarAba('aba-geral', this)">🔍 Consulta Geral</button>
         <button class="nav-btn" onclick="mudarAba('aba-cnpj', this)">🏢 Consulta CNPJ</button>
+        <button class="nav-btn" onclick="mudarAba('aba-cep', this)">📍 Consulta CEP</button>
     </aside>
 
     <main>
@@ -67,6 +68,18 @@ HTML_PAGINA = """
                 <input type="text" id="termo-cnpj" placeholder="Ex: 00000000000191">
                 <button onclick="consultarCNPJ()">Consultar CNPJ</button>
                 <pre id="res-cnpj">Aguardando dados...</pre>
+            </div>
+        </div>
+
+        <!-- ABA 3: CONSULTA CEP -->
+        <div id="aba-cep" class="tab-content">
+            <h2>Consulta de CEP (ViaCEP)</h2>
+            <p style="color: var(--text-muted);">Mapeia logradouro, bairro, município e UF através do código postal.</p>
+            <div class="card">
+                <label>Número do CEP:</label>
+                <input type="text" id="termo-cep" placeholder="Ex: 38400100">
+                <button onclick="consultarCEP()">Consultar CEP</button>
+                <pre id="res-cep">Aguardando dados...</pre>
             </div>
         </div>
     </main>
@@ -104,6 +117,19 @@ HTML_PAGINA = """
             let data = await resp.json();
             box.innerText = JSON.stringify(data, null, 2);
         }
+
+        async function consultarCEP() {
+            let val = document.getElementById('termo-cep').value;
+            let box = document.getElementById('res-cep');
+            box.innerText = "Consultando CEP...";
+            let resp = await fetch('/api/cep', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cep: val})
+            });
+            let data = await resp.json();
+            box.innerText = JSON.stringify(data, null, 2);
+        }
     </script>
 </body>
 </html>
@@ -131,13 +157,33 @@ def api_cnpj():
         return jsonify({"erro": "O CNPJ deve conter exatamente 14 dígitos."})
     
     try:
-        # Consulta real na API pública da BrasilAPI
         url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}"
         r = requests.get(url, timeout=8)
         if r.status_code == 200:
             return jsonify(r.json())
         else:
             return jsonify({"erro": "CNPJ não encontrado na base pública."})
+    except Exception as e:
+        return jsonify({"erro": str(e)})
+
+@app.route("/api/cep", methods=["POST"])
+def api_cep():
+    cep_raw = request.json.get("cep", "")
+    cep_limpo = re.sub(r"\D", "", cep_raw)
+    
+    if len(cep_limpo) != 8:
+        return jsonify({"erro": "O CEP deve conter exatamente 8 dígitos."})
+    
+    try:
+        url = f"https://viacep.com.br/ws/{cep_limpo}/json/"
+        r = requests.get(url, timeout=8)
+        if r.status_code == 200:
+            dados = r.json()
+            if "erro" in dados:
+                return jsonify({"erro": "CEP não encontrado."})
+            return jsonify(dados)
+        else:
+            return jsonify({"erro": "Falha na consulta ao ViaCEP."})
     except Exception as e:
         return jsonify({"erro": str(e)})
 
